@@ -1,0 +1,216 @@
+---
+title: "Beixi Lei_Simulation_HW1"
+author: "Beixi Lei"
+date: "1/23/2018"
+course: "Simulation Application"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#1st class exercise
+#Quick and dirty generator
+#First define my random number generator
+
+m <- 2^32 - 1
+idum <- 2
+icount <- 1
+numran <- 1000000
+ranx <- rep(0,numran)
+while (icount <= numran){
+  idum <- (1664525 * idum + 1013904223)%%m
+  ranx[icount] <- idum/m
+  icount <- icount + 1
+}
+hist(ranx)
+
+#change the range to [1:36]
+ran36 <- as.integer(36*ranx)+1
+hist(ran36)
+
+```
+
+```{r}
+#Problem 1: Random number generator that calculates both idum and idum2
+
+MYRAND <- function(idum){
+  #initializate all variables
+ idum <- inputvar[1]
+ numran <- inputvar[2]
+ IM1 <- 2147483563
+ IM2 <- 2147483399
+ IMM1 <- IM1 - 1
+ IA1 <- 40014
+ IA2 <- 40692
+ IQ1 <- 53668
+ IQ2 <- 52774 
+ IR1 <- 12211
+ IR2 <- 3791
+ NTAB <- 32
+ NDIV <- as.integer(1 + IMM1/NTAB)
+ AM <- 1.0/IM1
+ EPS <- 1.2e-7
+ RNMX <- 1.-EPS
+ iv <- rep(0,NTAB)
+ #idum <- 0
+ idum2 <- 123456789
+ iy <- 0
+ ranx <- rep(0,numran)
+ #Loop for random numbers
+ icount <- 1
+#random <- rep(0,1000)
+ for (icount in 1:numran){
+   if (idum <= 0){
+     idum <- max(-idum,1)
+     idum2 <- idum
+     j <- NTAB + 8
+     while (j > 0){
+       k = as.integer(idum/IQ1)
+       idum <- IA1 *(idum-k*IQ1)-k*IR1
+       if(idum < 0) {idum <- idum + IM1}
+       if (j <= NTAB) {iv[j] <- idum}
+       j <- j - 1
+       }
+       iy <- iv[1]
+   }
+  k <- as.integer(idum/IQ1)
+  idum <- IA1 *(idum - k*IQ1) - k*IR1
+  if (idum < 0) {idum = idum + IM1}
+  k <- as.integer(idum2/IQ2)
+  idum2 <- IA2*(idum2 - k*IQ2) - k*IR2
+  if (idum2 < 0) {idum2 <- idum2 + IM2}
+  j <- as.integer(iy/NDIV) + 1
+  iy <- iv[j] - idum2
+  iv[j] <- idum
+  if (iy < 1) { iy <-iy + IMM1}
+  ran2 <- min(AM*iy,RNMX)
+  ranx[icount] <- ran2
+  icount <- icount +  1
+  }
+ return(ranx)
+}
+
+#10000 random numbers between 0 and 1
+seed <- 3234
+numran <- 10000
+inputvar <- c(seed,numran)
+ranx <- MYRAND(inputvar)
+hist(ranx)
+
+#100 random numbers between 1 and 1000
+seed <- -3234
+numran <- 100
+inputvar <- c(seed,numran)
+ranx <- MYRAND(inputvar)
+ran1000 <- as.integer(ranx*1000)+1
+hist(ran1000)
+
+#We can see from the histogram that as the number of simulation increases, the frequency of number in each range get closer. If there are only 100 simulations, the frequency of each random number varies. 
+#The random numbers generated in simulation follow uniform distribution, where we used psedo random number.
+
+```
+
+
+```{r}
+#Problem 2: Roulette
+
+#For fair game:
+
+seed<- -3234
+fairgame=function(numran){
+  inputvar <- c(seed,numran)
+  ranx=MYRAND(inputvar)
+  ran36 =as.integer(ranx*36)+1
+  profit=rep(0,numran)
+  jcount=1
+   while (jcount<=numran){
+    if (ran36[jcount]==36){
+      profit[jcount]=35}
+    else{
+      profit[jcount]=-1}
+     jcount=jcount+1
+   }
+  output=c(mean(profit),sd(profit))
+  return(output)
+}
+
+unfair = function(numran){
+  seed <- -3234
+  inputvar <- c(seed,numran)
+  rany = MYRAND(inputvar)
+  ran38 = as.integer(rany*38) + 1
+  profit = rep(0,numran)
+  jcount = 1
+  while (jcount <= numran){
+    if (ran38[jcount] == 36){
+      profit[jcount]=35}
+    else{
+      profit[jcount] = -1}
+    jcount = jcount + 1
+  }
+  output = c(mean(profit),sd(profit))
+  return(output)
+}
+
+fairgame(100)
+fairgame(1000)
+fairgame(10000)
+hist(ran36)
+
+unfair(100)
+unfair(1000)
+unfair(10000)
+hist(ran38)
+
+```
+
+```{r}
+#Problem 3: Inverse normal 
+
+a0 <- 2.50662823884
+a1 <- -18.61500062529
+a2 <- 41.39119773534
+a3 <- -25.44106049637
+b0 <- 8.47357093090
+b1 <- 23.08336743743
+b2 <- -21.06224101826
+b3 <- 3.13082909833
+c0 <- 0.3374754822726147
+c1 <- 0.9761690190917186
+c2 <- 0.1607979714918209
+c3 <- 0.0276438810333863
+c4 <- 0.0038405729373609
+c5 <- 0.0003951896511919
+c6 <- 0.0000321767881768
+c7 <- 0.0000002888167364
+c8 <- 0.0000003960315187
+
+jcount <- 1
+seed <- 0
+numran <- 10000
+inputvar <- c(seed,numran)
+ranx <- MYRAND(inputvar)
+#numran <- inputvar[2]
+rany <- rep(0,numran)
+while (jcount <= numran) {
+  u <- ranx[jcount]
+  y <- u - 0.5
+  if (abs(y) < 0.42){
+    r <- y * y
+    x <- y*(((a3*r + a2)*r + a1)*r + a0)/((((b3*r + b2)*r + b1)*r + b0)*r+1)
+  }
+  else{
+    r <- u
+    if(y>0) {r <- 1-u}
+    r <- log(-log(r))
+    x <- c0 + r*(c1 + r*(c2 + r*(c3 + r*(c4 + r*(c5 + r*(c6 + r* (c7 + r * c8)))))))
+    if (y <0) {x <- -x}
+    x
+  }
+
+rany[jcount] <- x
+jcount = jcount + 1
+  }
+hist(rany,xlim=c(-5,5),breaks=10)
+#The histogram follows a normal distribution
+
+```
