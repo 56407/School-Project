@@ -1,0 +1,156 @@
+---
+title: "Beixi_Lei_Simulation_Assignment5"
+author: "Beixi Lei"
+course: "Simulation Application"
+date: "2/28/2018"
+output: html_document
+---
+
+Question 1: Pricing American Options
+```{r}
+source("~/Desktop/Simulation/Myfunctions.r")
+seed<-0
+numrand<-10000000
+rand_norm_c<-MYNORM(seed,numrand)
+```
+```{R}
+MYBSPut<- function(S0,Strike,rf,T,Volatility) {
+  d1<-(log(S0/Strike)+(rf+0.5*Volatility^2)*T)/(Volatility*sqrt(T))
+  d2<-d1-Volatility*sqrt(T)
+  Nmd1<-pnorm(-d1, mean=0, sd=1)
+  Nmd2<-pnorm(-d2, mean=0, sd=1)
+  P<-Strike*exp(-rf*T)*Nmd2-S0*Nmd1
+  return (P)
+}
+```
+
+Use log-normal to discretize bi-weekly grid over 1 year
+```{r}
+AmericanPut <- function(S0,Strike,rf,Volatility,T,numpath,numstep,Barrier){
+#S0 <- 100
+#rf <- 0.05
+#Strike<-100
+#Volatility<- 0.25
+#TMaturity<- 1
+#DeltaT <- (2/52)
+#numpath<-1000
+#numstep <- 52/2
+St0_Vals<-matrix(rep(0),nrow=numstep, ncol=numpath)
+Payoff <- rep(0,numpath)
+PV_Payoff <- rep(0,numpath)
+jcount<- 1   #number of path
+lcount<- 1   #number of random variables
+DeltaT <- T/numstep
+
+while(jcount <= numpath) {
+  St<- S0    #St is the simulated stock price
+  for (kcount in 1:numstep) {
+    St<-St*(exp((rf-0.5*(Volatility^2))*DeltaT+Volatility*sqrt(DeltaT)*rand_norm_c[lcount]))
+    St0_Vals[kcount,jcount]<-St
+    if (St <= Barrier) {
+      break
+    }
+    lcount<-lcount+1
+  }
+  Payoff[jcount] <- max(Strike-St,0)
+  PV_Payoff[jcount] <- Payoff[jcount]*exp(-rf*T*(kcount-1)/52)
+  jcount<- jcount+1
+}
+ AmericanPut <- mean(PV_Payoff)
+ return (AmericanPut)
+}
+
+AmericanPut(100,100,0.05,0.25,1,1000,26,70)
+AmericanPut(100,100,0.05,0.25,1,1000,26,90)
+AmericanPut(100,100,0.05,0.25,1,1000,26,85)
+
+OptimalBarrier <- optimize(AmericanPut, interval = c(0,100), tol = 0.00001, maximum = TRUE, S = 100, Strike = 100, rf = 0.05, Volatility = 0.25, T = 1, numpath = 1000, numstep = 26)
+cat("The optimal barrier is ", OptimalBarrier$maximum,"\n")
+cat("The optimal American put value is ", OptimalBarrier$objective)
+```
+
+```{r setup, include=FALSE}
+# Calculate European and American Put Values
+#
+S0<-100
+Strike<-100
+rf<-0.05
+T=1
+Volatility<-0.25
+#
+Put_BS<-MYBSPut(S0,Strike,rf,T,Volatility)
+cat(Put_BS,"\n")
+#
+# Binomial Model
+#
+# Binomial parameters
+numsteps<-26
+#deltaT <- (2/52) <- (1/26)
+DelT<-T/(numsteps-1)
+uptick<-exp(+Volatility*sqrt(DelT))
+dntick<-exp(-Volatility*sqrt(DelT))
+FVFactor<-exp(rf*DelT)
+probup<-(FVFactor-dntick)/(uptick-dntick)
+probdn<-1-probup
+SMat<-matrix(rep(0),nrow=numsteps,ncol=numsteps)
+EMat<-matrix(rep(0),nrow=numsteps,ncol=numsteps)
+AMat<-matrix(rep(0),nrow=numsteps,ncol=numsteps)
+for (i in 1:numsteps) {
+  for (j in 1:i) {
+    SMat[j,i]<-S0*uptick^(i-j)*dntick^(j-1) 
+}}
+#SMat[1:6,1:6]
+i<-numsteps
+for (j in 1:i) {
+  EMat[j,numsteps]<-max(Strike-SMat[j,numsteps],0)
+  AMat[j,numsteps]<-max(Strike-SMat[j,numsteps],0)
+}
+i<-i-1
+while (i > 0) {
+  for (j in 1:i) {
+    EMat[j,i] <- (1/FVFactor)*(probup*EMat[j,i+1] + probdn*EMat[j+1,i+1])
+    AMat[j,i] <- (1/FVFactor)*(probup*AMat[j,i+1] + probdn*AMat[j+1,i+1])
+    AMat[j,i] <- max(AMat[j,i],Strike-SMat[j,i])
+    }
+    i<-i-1
+}
+#SMat[,numsteps]
+EMat[1,1]
+AMat[1,1]
+#Put_BS
+```
+```{r}
+#
+lcount<-1
+numpaths<-100000
+ST_Vals<-rep(0,numpaths)
+Put_Vals<-rep(0,numpaths)
+ST_ValsA<-rep(0,numpaths)
+Put_ValsA<-rep(0,numpaths)
+numsteps<-26
+DelT<-T/numsteps
+jcount<-1
+while(jcount <= numpaths) {
+  ST<-S0
+  STA<-S0
+  icount<-1
+  flag<-0
+    while(icount <= numsteps) 
+    {ST<-ST*(exp((rf-0.5*(Volatility^2))*DelT+Volatility*sqrt(DelT)*rand_norm_c[lcount]))
+    STA<-STA*(exp((rf-0.5*(Volatility^2))*DelT+Volatility*sqrt(DelT)*(-rand_norm_c[lcount])))
+#    cat(icount,STA,"\n")
+    icount<-icount+1
+    lcount<-lcount+1
+    }
+    ST_Vals[jcount]<-ST
+    ST_ValsA[jcount]<-STA
+    Put_Vals[jcount]<-exp(-rf*T)*max(Strike-ST_Vals[jcount],0)
+    Put_ValsA[jcount]<-exp(-rf*T)*max(Strike-ST_ValsA[jcount],0)
+    #cat("A",jcount,icount,lcount,barrier[bcount,1],ST_Vals[jcount],Put_Vals[jcount],"\n")
+    jcount<-jcount+1
+}
+P1<-(mean(Put_Vals))
+P2<-(mean(Put_ValsA))
+PutValue<-(P1+P2)/2
+cat(P1, P2, PutValue,"\n")
+```
