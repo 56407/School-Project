@@ -1,0 +1,332 @@
+---
+title: "Simulation_Assignment2"
+author: "Beixi Lei"
+date: "1/30/2018"
+course: "Simulation Application"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+MYUNIFORM <- function(inputvar) {
+#
+# Initialize Constants
+#
+  IM1<-2147483563
+  IM2<-2147483399
+  IA1<-40014
+  IA2<-40692
+  IQ1<-53668
+  IQ2<-52774
+  IR1<-12211
+  IR2<-3791
+  NTAB<-32
+  EPS<-1.2e-7
+  RNMX<-1.-EPS
+#
+# Transform Variables
+#
+  IMM1<-IM1-1
+  NDIV<-as.integer(1+IMM1/NTAB)
+  AM<-1.0/IM1
+#
+# Initialize variables and arrays
+#
+  idum<-inputvar[1]
+  idum2<-123456789
+  numran<-inputvar[2]
+  ran2<-0
+  iy<-0
+  iv<-rep(0,NTAB)
+  rand_uniform_c<-rep(0,numran)
+#
+# Run the random number loop
+#  
+    icount<-1
+  for (icount in 1:numran) {
+    if (idum <= 0) {
+      idum<-max(-idum,1)
+      idum2<-idum
+      j<-NTAB+8
+      while (j > 0) {
+        k=as.integer(idum/IQ1)
+        idum<-IA1*(idum-k*IQ1)-k*IR1
+        if (idum < 0) {idum=idum+IM1}
+        if (j <= NTAB) {iv[j]<-idum}
+        j<-j-1
+      }
+        iy<-iv[1]
+      }
+    k<-as.integer(idum/IQ1)
+    idum<-IA1*(idum-k*IQ1)-k*IR1
+    if(idum < 0) {idum=idum+IM1}
+    k=as.integer(idum2/IQ2)
+    idum2<-IA2*(idum2-k*IQ2)-k*IR2 
+    if (idum2 < 0) {idum2<-idum2+IM2}
+    j<-as.integer(iy/NDIV)+1
+    iy<-iv[j]-idum2
+    iv[j]<-idum
+    if(iy < 1) {iy<-iy+IMM1}
+    ran2<-min(AM*iy,RNMX)
+    rand_uniform_c[icount]<-ran2
+    }
+  return(rand_uniform_c)
+}
+```
+
+
+```{r}
+#
+# Inverse Normal Generator
+# Input is vector of uniform random numbers
+#
+MYNORM <- function(rand_c) {
+# Initialize Constants
+  a0<-2.50662823884
+  a1<--18.61500062529
+  a2<-41.39119773534
+  a3<--25.44106049637
+  b0<--8.47351093090
+  b1<-23.08336743743
+  b2<--21.06224101826
+  b3<-3.13082909833
+  c0<-0.3374754822726147
+  c1<-0.9761690190917186
+  c2<-0.1607979714918209
+  c3<-0.0276438810333863
+  c4<-0.0038405729373609
+  c5<-0.0003951896511919
+  c6<-0.0000321767881768
+  c7<-0.0000002888167364
+  c8<-0.0000003960315187
+#
+# Loop over set of uniform random numbers and transform
+#
+  jcount<-1
+  numran<-length(rand_c)
+  rand_norm_c<-rep(0,numran)
+  while(jcount <= numran) {
+    u<-rand_c[jcount]
+    y<-u-0.5
+    if(abs(y) < 0.42) {
+      r<-y*y
+      x<-y*(((a3*r+a2)*r+a1)*r+a0)/((((b3*r+b2)*r+b1)*r+b0)*r+1)
+    } else {
+      r<-u
+      if(y>0){r<-1-u}
+      r<-log(-log(r))
+      x<-c0+r*(c1+r*(c2+r*(c3+r*(c4+r*(c5+r*(c6+r*(c7+r*c8)))))))
+      if(y<0){x<--x}
+    }
+#  cat("JCOUNT",jcount,"",u,"",x,"\n")
+  rand_norm_c[jcount]<-x
+  jcount=jcount+1
+  }
+  return(rand_norm_c)
+}
+
+```
+
+```{r}
+#
+# Call Uniform Random Number Generator (INPUT: SEED and NUMBER)
+#
+seed<-0
+numran<-1000000
+inputvar<-c(seed,numran)
+rand_uniform_c<-MYUNIFORM(inputvar)
+rand_uniform_c[1:10]
+hist(rand_uniform_c)
+#
+# Call Normal Random Number Generator (INPUT: UNIFORM RANDOM NUMBER VECTOR)
+#
+rand_norm_c<-MYNORM(rand_uniform_c)
+hist(rand_norm_c,xlim=c(-5,5),breaks=20,freq=F)
+curve(dnorm(x, mean=0, sd=1),from=-4, to=4,add=TRUE,lwd=2)
+rand_norm_c[1:10]
+```
+
+
+```{r}
+#Problem 1: question 1
+#Payoff = max((S1,S2,...SK,0),0)
+
+OptionOpt_Vals1 <- function(S0,Strike,rf,Volatility,T,numpath,numstep){
+  St_values <- matrix(rep(0),numstep + 1,numpath)
+  Payoff <- rep(0,numpath)
+  #Opt_Vals <- rep(0,numpath)
+  icount <- 1
+  jcount <- 1 
+  dt <- T/numstep
+  
+  while (jcount <= numpath){
+    St <- S0
+    St_values[1,jcount] <- St
+    
+    kcount <- 2 
+    #kcount equals numbers of steps
+    while (kcount <= numstep+1){
+      St <- St*exp((rf- 0.5 *(Volatility ^ 2))*dt+Volatility*sqrt(dt)*rand_norm_c[icount])
+      St_values[kcount,jcount] <- St
+      icount <- icount + 1
+      kcount <- kcount + 1
+    }
+      Payoff[jcount] <- max(max(St_values[2:(numstep + 1), jcount]) - Strike,0)
+  
+    jcount <- jcount + 1
+  }
+  
+  cat("ST",ST_Vals)
+  Variance <- var(Payoff*exp(-rf*T))
+  Payoff_avg <- mean(Payoff)
+  Opt_Vals <- Payoff_avg*exp(-rf*T)
+  cat("Option Value: ", Opt_Vals,"\n")
+  stdev <- sqrt(Variance)/sqrt(numpath)
+  CI <- c(Opt_Vals - 1.96*stdev,Opt_Vals + 1.96*stdev)
+  cat('Confidence interval: ', CI,"\n")
+}
+
+
+#S0 <-76
+#Strike <- 80
+#rf <- 0.03
+#Volatility <- 0.25
+#T <- 1
+#numpath <- 1000
+#numstep <- 12
+
+#Call function
+OptionOpt_Vals1(76,80,0.03,0.25,1,1000,12)
+OptionOpt_Vals1(76,80,0.03,0.25,1,10000,12)
+
+  
+```
+
+```{r}
+#Problem 1: Question2
+#Payoff = max(St - min(S1,S2,...St),0)
+
+OptionOpt_Vals2 <- function(S0,Strike,rf,Volatility,T,numpath,numstep){
+  St_values <- matrix(rep(0),numstep + 1,numpath)
+  Payoff <- rep(0,numpath)
+  #Opt_Vals <- rep(0,numpath)
+  icount <- 1
+  jcount <- 1 
+  dt <- T/numstep
+  
+  while (jcount <= numpath){
+    St <- S0
+    St_values[1,jcount] <- St
+    
+    kcount <- 2 
+    #kcount equals numbers of steps
+    while (kcount <= numstep+1){
+      St <- St*exp((rf- 0.5 *(Volatility ^ 2))*dt+Volatility*sqrt(dt)*rand_norm_c[icount])
+      St_values[kcount,jcount] <- St
+      icount <- icount + 1
+      kcount <- kcount + 1
+    }
+      Payoff[jcount] <- max(St_values[numstep+1,jcount]-min(St_values[2:(numstep + 1),jcount]),0)
+  
+    jcount <- jcount + 1
+  }
+  
+  Variance <- var(Payoff*exp(-rf*T))
+  Payoff_avg <- mean(Payoff)
+  Opt_Vals <- Payoff_avg*exp(-rf*T)
+  cat("Option Value: ", Opt_Vals,"\n")
+  stdev <- sqrt(Variance)/sqrt(numpath)
+  CI <- c(Opt_Vals - 1.96*stdev,Opt_Vals + 1.96*stdev)
+  cat('Confidence interval: ', CI,"\n")
+}
+
+
+#S0 <-76
+#Strike <- 80
+#rf <- 0.03
+#Volatility <- 0.25
+#T <- 1
+#numpath <- 1000
+#numstep <- 12
+
+#Call function
+OptionOpt_Vals2(76,80,0.03,0.25,1,1000,12)
+OptionOpt_Vals2(76,80,0.03,0.25,1,10000,12)
+
+```
+
+
+```{r}
+# Problem 2: Quantos 
+# S1(T) is the price of the stock at time t in USD, and S2(T) is the EURO/USD exchange rate
+#For 1000 estimates
+
+QuantosOption <-function(S10,S20,K,r1f,r2f,Volatility1,Volatility2,correlation,T,numpath,numstep) {
+  
+  S10t_Vals <- matrix(rep(0),numstep+1,numpath)
+  S20t_Vals <- matrix(rep(0),numstep+1,numpath)
+  #covariance matrix
+  A <- matrix(c(Volatility1,0,correlation*Volatility2,sqrt(1-correlation^2)*Volatility2),2,2)
+  Payoff <- rep(0,numpath)
+  #Opt_Vals <- rep(0,numpath)
+  icount <- 1 
+  jcount <- 1 
+  dt <- T/numstep
+  
+  while (jcount <= numpath){
+    S10t <- S10
+    S20t <- S20
+    S10t_Vals[1,jcount] <- S10t
+    S20t_Vals[1,jcount] <- S20t
+    
+    kcount <- 2   
+    
+    #Stock price and exchange rate follows GBM
+    while (kcount <= numstep+1){
+      S10t <- S10t*exp((r1f - 0.5*(Volatility1 ^ 2))*dt+(A[1,1]*rand_norm_c[icount])*sqrt(dt))
+      S20t <- S20t*exp(((r2f - r1f)-0.5*(Volatility2 ^ 2))*dt+(A[2,1]*rand_norm_c[icount]+A[2,2]*rand_norm_c[icount+1])*sqrt(dt))
+      
+      S10t_Vals[kcount,jcount] <- S10t
+      S20t_Vals[kcount,jcount] <- S20t
+      
+      icount <- icount + 2   
+      kcount <- kcount + 1
+    }
+    
+    Payoff[jcount] <- max(S10t_Vals[numstep+1,jcount]*S20t_Vals[numstep+1,jcount]-Strike,0)
+    
+    jcount <- jcount + 1
+  }
+  
+  Payoff_avg <- mean(Payoff)
+  Opt_Vals <- Payoff_avg*exp(-r2f*T)
+  cat("Option Value: ",Opt_Vals,"\n")
+  stdev <- sqrt(Opt_Vals)/sqrt(numpath)
+  CI <- c(Opt_Vals - 1.96*stdev, Opt_Vals + 1.96 * stdev)
+  cat("Confidence interval: ",CI,"\n")
+}
+
+#Stock price for AMZN and EURO/USD exchange rate
+S10 <- 1429
+S20 <- 1.2422
+#Stike price equals to the current stock Opt_Vals in USD * S2(0)
+Strike <-1429*1.2422
+#Risk-free interest rate for both AMZN and EURO/USD exchange rate
+r1f <- 0.014
+r2f <- 0.00291
+#Volatility for both AMZN and EURO/USD
+Volatility1 <- 0.124574
+Volatility2 <-0.06298
+#covariance <- 0.0000345456
+correlation <--0.0345
+# 3-month maturity
+T <- (3/12)
+#Simulation path
+numpath <-1000
+numstep <-12
+
+#Call function
+#QuantosOption(S10,S20,Strike,r1f,r2f,Volatility1,Volatility2,correlation,T,numpath,numstep)
+QuantosOption(1429,1.2422,1429*1.2422,0.014,0.00291,0.124574,0.06298,-0.0345,3/12,1000,12)
+QuantosOption(1429,1.2422,1429*1.2422,0.014,0.00291,0.124574,0.06298,-0.0345,3/12,10000,12)
+```
