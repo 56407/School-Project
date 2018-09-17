@@ -1,0 +1,435 @@
+---
+title: "Simulation_Assignment3"
+author: "Beixi Lei"
+course: "Simulation Application"
+date: "2/11/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+MYUNIFORM <- function(inputvar) {
+#
+# Initialize Constants
+#
+  IM1<-2147483563
+  IM2<-2147483399
+  IA1<-40014
+  IA2<-40692
+  IQ1<-53668
+  IQ2<-52774
+  IR1<-12211
+  IR2<-3791
+  NTAB<-32
+  EPS<-1.2e-7
+  RNMX<-1.-EPS
+#
+# Transform Variables
+#
+  IMM1<-IM1-1
+  NDIV<-as.integer(1+IMM1/NTAB)
+  AM<-1.0/IM1
+#
+# Initialize variables and arrays
+#
+  idum<-inputvar[1]
+  idum2<-123456789
+  numran<-inputvar[2]
+  ran2<-0
+  iy<-0
+  iv<-rep(0,NTAB)
+  rand_uniform_c<-rep(0,numran)
+#
+# Run the random number loop
+#  
+    icount<-1
+  for (icount in 1:numran) {
+    if (idum <= 0) {
+      idum<-max(-idum,1)
+      idum2<-idum
+      j<-NTAB+8
+      while (j > 0) {
+        k=as.integer(idum/IQ1)
+        idum<-IA1*(idum-k*IQ1)-k*IR1
+        if (idum < 0) {idum=idum+IM1}
+        if (j <= NTAB) {iv[j]<-idum}
+        j<-j-1
+      }
+        iy<-iv[1]
+      }
+    k<-as.integer(idum/IQ1)
+    idum<-IA1*(idum-k*IQ1)-k*IR1
+    if(idum < 0) {idum=idum+IM1}
+    k=as.integer(idum2/IQ2)
+    idum2<-IA2*(idum2-k*IQ2)-k*IR2 
+    if (idum2 < 0) {idum2<-idum2+IM2}
+    j<-as.integer(iy/NDIV)+1
+    iy<-iv[j]-idum2
+    iv[j]<-idum
+    if(iy < 1) {iy<-iy+IMM1}
+    ran2<-min(AM*iy,RNMX)
+    rand_uniform_c[icount]<-ran2
+    }
+  return(rand_uniform_c)
+}
+```
+
+```{r}
+#
+# Call Uniform Random Number Generator (INPUT: SEED and NUMBER)
+#
+seed<-0
+numran<-1000000
+inputvar<-c(seed,numran)
+rand_uniform_c<-MYUNIFORM(inputvar)
+rand_uniform_c[1:10]
+hist(rand_uniform_c)
+
+```
+
+```{r}
+#
+# Inverse Normal Generator
+# Input is vector of uniform random numbers
+#
+MYNORM <- function(seed,numran) {
+  inputvar<-rep(0,2)
+  inputvar[1]<-seed
+  inputvar[2]<-numran
+#
+# Call Uniform Random Number Generator
+#
+  rand_uniform_c<-MYUNIFORM(inputvar)
+  # Initialize Constants
+  a0<-2.50662823884
+  a1<--18.61500062529
+  a2<-41.39119773534
+  a3<--25.44106049637
+  b0<--8.47351093090
+  b1<-23.08336743743
+  b2<--21.06224101826
+  b3<-3.13082909833
+  c0<-0.3374754822726147
+  c1<-0.9761690190917186
+  c2<-0.1607979714918209
+  c3<-0.0276438810333863
+  c4<-0.0038405729373609
+  c5<-0.0003951896511919
+  c6<-0.0000321767881768
+  c7<-0.0000002888167364
+  c8<-0.0000003960315187
+#
+# Call Uniform Random Number Generator
+#
+inputvar<-c(seed,numran)
+rand_uniform_c<-MYUNIFORM(inputvar)
+#
+# Loop over set of uniform random numbers and transform
+#
+  jcount<-1
+  rand_norm_c<-rep(0,numran)
+  while(jcount <= numran) {
+    u<-rand_uniform_c[jcount]
+    y<-u-0.5
+    if(abs(y) < 0.42) {
+      r<-y*y
+      x<-y*(((a3*r+a2)*r+a1)*r+a0)/((((b3*r+b2)*r+b1)*r+b0)*r+1)
+    } else {
+      r<-u
+      if(y>0){r<-1-u}
+      r<-log(-log(r))
+      x<-c0+r*(c1+r*(c2+r*(c3+r*(c4+r*(c5+r*(c6+r*(c7+r*c8)))))))
+      if(y<0){x<--x}
+    }
+#  cat("JCOUNT",jcount,"",u,"",x,"\n")
+  rand_norm_c[jcount]<-x
+  jcount=jcount+1
+  }
+  return(rand_norm_c)
+}
+
+```
+
+```{r}
+#
+# Call Normal Random Number Generator (INPUT: UNIFORM RANDOM NUMBER VECTOR)
+#
+seed<-0
+numran<-1000000
+rand_norm_c<-MYNORM(seed,numran)
+hist(rand_norm_c,xlim=c(-5,5),breaks=20,freq=F)
+curve(dnorm(x, mean=0, sd=1),from=-4, to=4,add=TRUE,lwd=2)
+rand_norm_c[1:10]
+
+```
+
+
+```{r}
+
+#First calculate the stock price 
+stockprice <- function(S0,drift,Volatility,T,numpath){
+  
+ST_Vals<-matrix(rep(0),nrow=252 + 1, ncol=numpath)
+ST_Rets<-rep(0,numpath)
+ST_Vals_avg<-rep(0,numpath)
+ST_avg <- rep(0,1)
+jcount<-1   #number of paths
+lcount<-1   #number of random variables
+dt <- T/252
+while(jcount <= numpath) {
+  St<-S0
+  St <- S0
+  ST_Vals[0,jcount] <- S0
+  ST_Vals[1,jcount] <- St
+  
+  for (kcount in 1:252) {
+    St <-St*(exp((drift)*dt+Volatility*sqrt(dt)*rand_norm_c[lcount]))
+    ST_Vals[kcount + 1 ,jcount]<-St
+    ST_avg<- ST_avg + St
+    lcount<-lcount+1
+  }
+
+
+  ST_Rets[jcount]<-log(ST_Vals[252,jcount]/S0)
+  ST_avg<-(ST_avg)/252
+  ST_Vals_avg[jcount]<-ST_avg
+  
+  jcount=jcount+1
+}
+  #cat(ST_Vals,"\n")
+  return (ST_avg)
+}
+
+# T = 1/252
+#for stock price of 1-month sell and rf = 0.08 and sigma  = 0.2
+stock1 <- stockprice(100,0.08,0.2,1,1000) 
+#for stock price of 1-month sell and rf = 0.12 and sigma  = 0.3
+stock2 <- stockprice(100,0.12,0.3,1,1000)
+
+```
+
+
+```{r}
+
+#For 2-month purchase of put option
+#Assume that the risk free rate is 2%, and used to calculate B-S put and PV of put price
+#Purchase from month 1 to month 11
+
+purchaseputvalue <- function(S0,rf,drift,Volatility,T,numpath,multipler){
+  
+  ST_values<-matrix(rep(0),nrow=12 + 1, ncol=numpath)
+  Put_price <- matrix(rep(0),nrow=12 + 1,ncol=numpath)
+  Strike <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  minusd1 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  minusd2 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  Nminusd1 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  Nminusd2 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  
+  lcount<-1   #number of random variables
+  jcount<-1   #number of paths
+  dt <- T/12
+  
+  while (jcount <= numpath){
+    St <- S0
+    ST_values[0,jcount] <- S0
+    ST_values[1,jcount] <- St
+    #kcount <- 2 
+    #kcount counts numbers of steps
+    for (kcount in 1:12) {
+      St <- St*exp((drift)*(1/12)+Volatility*sqrt(1/12)*rand_norm_c[lcount])
+      ST_values[kcount + 1,jcount] <- St
+      lcount <- lcount + 1
+      }
+    
+      Strike <- multipler * ST_values
+      minusd1 <- (log(ST_values*exp(rf*dt)/Strike) + (0.5*Volatility^2)*dt)/(Volatility*sqrt(dt))
+      minusd2 <- minusd1-Volatility*sqrt(dt)
+      Nminusd1 <- pnorm(-minusd1,mean=0,sd=1)
+      Nminusd2 <- pnorm(-minusd2,mean=0,sd=1)
+      
+     Put_price <- Strike*exp(-rf*dt)*Nminusd2 - ST_values*Nminusd1
+     Put_price[12+1,numpath] <- 0
+     jcount <- jcount + 1
+  }
+  #cat(ST_values,"\n")
+  for (i in 1: numpath){
+  Put_price_average <- Put_price[i] / numpath
+  Put_price_std <- sd(Put_price)
+  i <- i + 1
+  }
+
+  return (Put_price)
+}
+
+#Call function
+#Put price with 2-month purchase and r = 0.08 and sigma = 0.2, and 5% out-of-the-money
+purchase1 <- purchaseputvalue(100,0.02,0.08,0.2,2,1000,0.95)
+#Put price with 2-month purchase and r = 0.12 and sigma = 0.3,and 5% out-of-the-money
+purchase2 <- purchaseputvalue(100,0.02,0.12,0.3,2,1000,0.95)
+#Put price with 2-month purchase and r = 0.08 and sigma = 0.2,and 5% in-the-money
+purchase3 <- purchaseputvalue(100,0.02,0.08,0.2,2,1000,1.05)
+#Put price with 2-month purchase and r = 0.12 and sigma = 0.3,and 5% in-the-money
+purchase4 <- purchaseputvalue(100,0.02,0.12,0.3,2,1000,1.05)
+
+```
+
+```{r}
+
+#For 1-month sell of put option
+#For sell from month 2 to month 12, while month 1 sell value is 0
+
+sellputvalue <- function(S0,rf,drift,Volatility,T,numpath,multipler){
+  
+  ST_values<-matrix(rep(0),nrow=12 + 1, ncol=numpath)
+  Put_price <- matrix(rep(0),nrow=12 + 1,ncol=numpath)
+  Strike <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  minusd1 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  minusd2 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  Nminusd1 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  Nminusd2 <- matrix(rep(0,nrow=12 + 1,ncol=numpath))
+  
+  lcount<-1   #number of random variables
+  jcount<-1   #number of paths
+  dt <- T/12
+  
+  while (jcount <= numpath){
+    St <- S0
+    ST_values[0,jcount] <- S0
+    ST_values[1,jcount] <- St
+    #kcount <- 2 
+    #kcount counts numbers of steps
+    for (kcount in 1:12) {
+      St <- St*exp((drift)*(1/12)+Volatility*sqrt(1/12)*rand_norm_c[lcount])
+      ST_values[kcount + 1,jcount] <- St
+      lcount <- lcount + 1
+      }
+    
+      Strike <- as.integer(multipler * ST_values)
+      #Put_price <- sellputprice(St,drift,rf,Volatility,numpath,multipler)
+      minusd1 <- (log(ST_values*exp(rf*dt)/Strike) + (0.5*Volatility^2)*dt)/(Volatility*sqrt(dt))
+      minusd2 <- minusd1-Volatility*sqrt(dt)
+      Nminusd1 <- pnorm(-minusd1,mean=0,sd=1)
+      Nminusd2 <- pnorm(-minusd2,mean=0,sd=1)
+      
+     Put_price <- Strike*exp(-rf*dt)*Nminusd2 - ST_values*Nminusd1
+     Put_price[1,numpath] <- 0
+     jcount <- jcount + 1
+  }
+  #cat(ST_values,"\n")
+  for (i in 1: numpath){
+  Put_price_average <- Put_price[i] / numpath
+  Put_price_std <- sd(Put_price)
+  i <- i + 1
+  }
+  #output stock price mean and standard deviation 
+  #cat(Put_price_average,"\n")
+  #cat(Put_price_std,"\n")
+  return (Put_price)
+}
+     
+sell1 <- sellputvalue(100,0.02,0.12,0.3,1,1000,0.95)
+#Put price with 1-month sale and r = 0.12 and sigma = 0.3,and 5% out-of-the-money
+sell2 <- sellputvalue(100,0.02,0.12,0.3,1,1000,0.95)
+#Put price with 1-month sale and r = 0.08 and sigma = 0.2,and 5% in-the-money
+sell3 <- sellputvalue(100,0.02,0.08,0.2,1,1000,1.05)
+#Put price with 1-month sale and r = 0.12 and sigma = 0.3,and 5% in-the-money
+sell4 <- sellputvalue(100,0.02,0.12,0.3,1,1000,1.05)
+
+
+```
+
+```{r}
+
+#Calculate net income for 12 month, where net income  = sell value - purchase value
+
+netincome <- matrix(rep(0),nrow = 12 + 1, ncol = numpath)
+rf <- 0.02
+
+  #FV of profit at the end of one year
+  profitsum <- 0
+  for (i in 1:12){
+    profitsum <- profitsum + exp(rf*(12-i)/12)*(sell1[i] - purchase1[i])
+    i <- i + 1
+  }
+  
+  #return in one-month
+  ST_values1 <- stock1
+  St <- ST_values1[13,]
+  S0 <- ST_values1[1,]
+  return1 <- (St - S0 + profitsum)/S0
+  returnmean1 <- mean(return1)
+  returnmean1
+  returnstdev1<- sd(return1)
+  returnstdev1
+  
+  
+  #FV of profit at the end of one year
+  profitsum <- 0
+  for (i in 1:12){
+    profitsum <- profitsum + exp(rf*(12-i)/12)*(sell2[i] - purchase2[i])
+    i <- i + 1
+  }
+  #profitsum
+  
+  #return in one-month
+  ST_values2 <- stock2
+  St <- ST_values2[13,]
+  S0 <- ST_values2[1,]
+  return2 <- (St - S0 + profitsum)/S0
+  returnmean2 <- mean(return2)
+  returnmean2
+  returnstdev2 <- sd(return2)
+  returnstdev2
+  
+  
+  #FV of profit at the end of one year
+  profitsum <- 0
+  for (i in 1:12){
+    profitsum <- profitsum + exp(rf*(12-i)/12)*(sell3[i] - purchase3[i])
+    i <- i + 1
+  }
+
+  ST_values3 <- stock1
+  St <- ST_values3[13,]
+  S0 <- ST_values3[1,]
+  return3 <- (St - S0 + profitsum)/S0
+  returnmean3 <- mean(return3)
+  returnmean3
+  returnstdev3 <- sd(return3)
+  returnstdev3
+  
+  #FV of profit at the end of one year
+  profitsum <- 0
+  for (i in 1:12){
+    profitsum <- profitsum + exp(rf*(12-i)/12)*(sell4[i] - purchase4[i])
+    i <- i + 1
+  }
+  #profitsum
+  
+  #return in one-month
+  ST_values4 <- stock2
+  St <- ST_values4[13,]
+  S0 <- ST_values4[1,]
+  return4 <- (St - S0 + profitsum)/S0
+  returnmean4 <- mean(return4)
+  returnmean4
+  returnstdev4 <- sd(return4)
+  returnstdev4
+  
+  retunstdev <- c(returnstdev1,returnstdev2,returnstdev3,returnstdev4)
+  #Figure out the quantile of the 
+  quantile(c(returnmean1,returnmean2,returnmean3,returnmean4))
+  hist(retunstdev)
+  #quantitle(ST_Rets)
+  
+```
+
+
+```{r}
+#install.packages("data.table")
+require(data.table)
+return = data.table(v1 = 1:4, v2=c(returnmean1,returnmean2,returnmean3,returnmean4),v3 = c(returnstdev1,returnstdev2,returnstdev3,returnstdev4))
+return
+
+```
+
