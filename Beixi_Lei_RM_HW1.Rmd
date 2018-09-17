@@ -1,0 +1,328 @@
+---
+title: "Risk_Management_HW1"
+author: "Beixi Lei"
+date: "4/2/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(corpcor)
+library(tseries)
+library(quantmod)
+library(PerformanceAnalytics)
+library(plyr)
+library(MASS)
+```
+
+Part 1
+single stock return/dollar historical and parametric VaR
+```{r}
+#1 stock condition 
+#Return hisotical and parametric VaR
+stkpool = ("CL")
+StartDate = as.Date("2017-03-13")
+EndDate = as.Date("2018-03-13")
+for(stk in stkpool){
+  getSymbols(stk, from = StartDate, to = EndDate)
+  expr <- paste(stk, " = data.frame(dailyReturn(", stk, "))", sep="")
+  na.omit(stk)
+  eval(parse(text = expr))
+  # CL = data.frame(date = index(dailyReturn(CL)), dailyReturn(CL))
+}
+stock <- CL
+#stock
+
+#hisotical VaR and histogram
+VaR(stock$daily.returns)
+VaR(stock$daily.returns,0.99)
+hist(stock$daily.returns,breaks=30,freq=F)
+curve(dnorm(x, mean=mean(stock$daily.returns), sd=sd(stock$daily.returns)),add=TRUE,col="darkblue",lwd=2)
+
+#Calculate return parametric VaR
+stkmean <- mean(stock$daily.returns)
+stksd <- sd(stock$daily.returns)
+#z-score at 95% confidence interval is 1.645
+zscore <- 1.645
+parametricvar <- stkmean - zscore * stksd
+parametricvar
+
+#Plot parametric VaR with normal distribution 
+x <- seq(0,100,0.01)
+hist(stock$daily.returns,prob=TRUE)
+curve(dnorm(x, mean=mean(stock$daily.returns), sd=sd(stock$daily.returns)),col="darkblue",add=TRUE,lwd=2)
+
+#Dollar historical and parametric VaR
+stocks <- ("CL")
+  pricedata.env <- new.env()
+  l_ply(stocks, function(sym) try(getSymbols(sym,env=pricedata.env,from = StartDate, to = EndDate),silent=T))
+  stocks <- stocks[stocks %in% ls(pricedata.env)]
+  pricedata <- xts()
+  for(i in seq_along(stocks)) {
+    symbol <- stocks[i]
+    pricedata <- merge(pricedata, Ad(get(symbol,envir=pricedata.env)))
+    diff <- diff(pricedata)
+  }
+
+difference <- as.numeric(diff$CL.Adjusted)
+difference[is.na(difference)] <- 0
+VaR(difference)
+VaR(difference,0.99)
+
+#Plot the dollar historical VaR
+hist(difference,breaks=30,freq=F)
+curve(dnorm(x, mean=mean(difference), sd=sd(difference)),col="darkblue",add=TRUE,lwd=2)
+
+#Default 95% possibility
+mean <- mean(difference)
+sd <- sd(difference)
+zscore <- 1.645
+parametricvar1 <- mean - zscore*sd
+parametricvar1
+
+#99% possibility
+zscore2 <- 2.326
+parametricvar2 <- mean - zscore2 * sd
+parametricvar2
+
+#Plot with normal distribution
+x <- seq(0,100,0.01)
+hist(difference,prob=TRUE)
+curve(dnorm(x, mean=mean(difference), sd=sd(difference)),col="darkblue",add=TRUE,lwd=2)
+
+```
+
+Portfolio return historical and parametric VaR
+```{r}
+#Mult-stock case: portfolio 
+#sktpool is a data.frame
+stkpool = c("CL","MGA","ABX","NLY","MAS","DISCA","DISCK","VIAB","VIA"
+            ,"GT")
+# Specify Date range of stkdata
+StartDate = as.Date("2017-03-13")
+EndDate = as.Date("2018-03-13")
+
+# Get data from Yahoo!Finance
+for(stk in stkpool){
+  getSymbols(stk, from = StartDate, to = EndDate)
+  expr <- paste(stk, " = data.frame(dailyReturn(", stk, "))", sep="")
+  na.omit(stk)
+  eval(parse(text = expr))
+  # CL = data.frame(date = index(dailyReturn(CL)), dailyReturn(CL))
+}
+
+stock <- cbind(CL,MGA,ABX,NLY,MAS,DISCA,DISCK,VIAB,VIA,GT)
+#stock
+```
+
+```{r}
+#Calculate variance-covariance matrix
+covmat = matrix(c(cov(stock)),nrow=length(stkpool),ncol=length(stkpool))
+range.names = c("stock1", "stock2", "stock3", "stock4", "stock5","stock6", "stock7", "stock8", "stock9", "stock10")
+dimnames(covmat) = list(range.names,range.names)
+#covmat
+#Transfome covariance to correlation matrix
+covmat <- cov2cor(covmat)
+#covmat
+#calculcate weight matrix: equally weight portfolio 
+weight <- matrix(rep(0),nrow = length(stkpool),ncol=1)
+
+for (i in 1:length(stkpool)){
+  weight[i] <- 0.1
+  i <-i + 1
+}
+#Equally weight
+weightinverse <- ginv(weight)
+#Portfolio standard deviation 
+portfoliovariance<- weightinverse %*% covmat %*% weight
+portfoliostd <- sqrt(portfoliovariance)
+
+#Portfolio mean
+portfoliomean = 0
+w = 1/length(stkpool)
+for (i in 1:length(stkpool)){
+  portfoliomean <- portfoliomean + mean(stock[,i])*w
+}
+
+rp = 0
+w = 1 / length(stkpool)
+for(i in 1:length(stkpool)){
+  rp <- rp + stock[i]*w
+}
+
+VaR(rp$daily.returns)
+VaR(rp$daily.returns,0.99)
+hist(rp$daily.returns,breaks=30,freq=F)
+curve(dnorm(x, mean=mean(rp$daily.returns), sd=sd(rp$daily.returns)),col="darkblue",add=TRUE,lwd=2)
+
+
+#Read file contains VIX, GSPC and interest rate
+information <- read.csv("~/Desktop/^GSPC.csv",header=TRUE,sep="")
+
+#Multiple regression 
+
+
+#Return Parametric VaR - default 95% possibility
+zscore <- 1.645
+parametricvar <- mean(rp$daily.returns) - zscore * portfoliostd
+parametricvar
+#Return Parametric VaR - 99% possibility
+zscore2 <- 2.326
+parametricvar2 <- mean(rp$daily.returns) - zscore2 * portfoliostd
+parametricvar2
+
+#Plot portfolio parametric VaR with normal distribution 
+x <- seq(0,100,0.01)
+hist(rp$daily.returns,prob=TRUE)
+curve(dnorm(x, mean=mean(rp$daily.returns), sd=sd(rp$daily.returns)),col="darkblue",add=TRUE,lwd=2)
+
+```
+
+Portfolio dollar historical and parametric VaR
+```{r}
+#Get adjusted close price 
+stocks <-  c("CL","MGA","ABX","NLY","MAS","DISCA","DISCK","VIAB","VIA"
+            ,"GT")
+  pricedata.env <- new.env()
+
+  ### here we use l_ply so that we don't double save the data
+  ### getSymbols() does this already so we just want to be memory efficient
+  ### go through every stock and try to use getSymbols()
+  l_ply(stocks, function(sym) try(getSymbols(sym,env=pricedata.env,from = StartDate, to = EndDate),silent=T))
+
+  ### now we only want the stocks that got stored from getSymbols()
+  ### basically we drop all "bad" tickers
+  stocks <- stocks[stocks %in% ls(pricedata.env)]
+
+  ### now we just loop through and merge our good stocks
+  ### if you prefer to use an lapply version here, that is also fine
+  ### since now we are just collecting all the good stock xts() objects
+  pricedata <- xts()
+  for(i in seq_along(stocks)) {
+    symbol <- stocks[i]
+    pricedata <- merge(pricedata, Ad(get(symbol,envir=pricedata.env)))
+    #names(pricedata)[i] <- paste("close.price")
+    diff <- diff(pricedata)
+  }
+
+#Replace NA value to 0
+diff[is.na(diff)] <- 0
+#diff
+```
+
+```{r}
+weight <- matrix(rep(0),nrow = length(stocks),ncol=1)
+for (i in 1:length(stocks)){
+  weight[i] <- 0.1
+  i <-i + 1
+}
+#Calculate covariance-variance matrix
+covmat = matrix(c(cov(diff)),nrow=length(stocks),ncol=length(stocks))
+range.names = c("stock1", "stock2", "stock3", "stock4", "stock5","stock6", "stock7", "stock8", "stock9", "stock10")
+dimnames(covmat) = list(range.names,range.names)
+#Transfome covariance to correlation matrix
+covmat <- cov2cor(covmat)
+#covmat
+
+#Calculate weight
+weightinverse <- ginv(weight)
+#Portfoli standard deviation
+pricevarvariance <- weightinverse %*% covmat %*% weight
+pricevarstd <- sqrt(pricevarvariance)
+
+#Portfolio mean
+portfoliomean = 0
+w = 1/length(stocks)
+for (i in 1:length(stkpool)){
+  portfoliomean <- portfoliomean + mean(diff[,i])*w
+}
+#rp is the portfolio 
+rp = 0
+w = 1 / length(stocks)
+for(i in 1:length(stocks)){
+  # browser()
+  rp <- rp + diff[,i]*w
+}
+
+#default 0.95
+VaR(rp)
+VaR(rp,0.99)
+hist(rp,breaks=30,freq=F)
+curve(dnorm(x, mean=mean(rp$CL.Adjusted), sd=sd(rp$CL.Adjusted)),col="darkblue",add=TRUE,lwd=2)
+
+#Dollar Parametric VaR - default 95% possibility
+parametricvar <- mean(rp$CL.Adjusted) - 1.645 * pricevarstd
+parametricvar
+
+#Dollar Parametric VaR - 99% possibility
+parametricvar2 <- mean(rp$CL.Adjusted) - 2.326 * pricevarstd
+parametricvar2
+
+#Plot with normal distribution curve
+x <- seq(0,100,0.01)
+hist(rp$CL.Adjusted,prob=TRUE)
+curve(dnorm(x, mean=mean(rp$CL.Adjusted), sd=sd(rp$CL.Adjusted)),col="darkblue",add=TRUE,lwd=2)
+
+```
+
+Factor-based VaR
+Principal Component Analysis
+```{r}
+#Assume a linear factor-based return generating model
+#stock is the daily return matrix which has 252*10 dimension
+#covmat is the covariance-variance matrix
+#eigen is the eigenvalue matrix
+eigenmatrix <- eigen(covmat)
+str(eigenmatrix)
+phi <- eigenmatrix$vectors[,1:2]
+phi <- -phi
+row.names(phi) <- c("stock1","stock2","stock3","stock4","stock5","stock6","stock7","stock8","stock9","stock10")
+colnames(phi) <- c("PC1","PC2")
+phi
+#Calculate Principal Components scores
+PC1 <- as.matrix(stock)%*%phi[,1]
+PC2 <- as.matrix(stock)%*%phi[,2]
+PC <- data.frame(PC1,PC2)
+head(PC)
+
+```
+
+
+Calculate a vecto of PCE for each principal component 
+```{r}
+PVE <- eigenmatrix$values / sum(eigenmatrix$values)
+round(PVE,2)
+
+#PVE plot
+#PVEplot <- qplot(c(1:10),PVE) + geom_line() + xlab("Principal Component") + ylab("PVE") + ggtitle("Scree Plot") + ylim(0,1)
+
+#Cumulative PVE plot
+#cumPVE <- qplot(c(1:10),cumsum(PVE)) + geom_line() + xlab("Principal Component") + ylab(NULL) + ggtitle("Cumulative Scree Plot") + ylim(0,1)
+
+#grid.arrange(PVEplot,cumPVE,ncol=2)
+```
+
+```{r}
+pca_result <- prcomp(stock,scale=TRUE)
+names(pca_result)
+
+#means
+pca_result$center
+
+#standard deviations
+pca_result$scale
+
+pca_result$rotation
+pca_result$rotation <- - pca_result$rotation
+pca_result$rotation
+
+pca_result$x <- -pca_result$x
+head(pca_result$x)
+
+biplot(pca_result,scale=0)
+
+pca_result$sdev
+VE <- pca_result$sdev^2
+PVE <- VE/sum(VE)
+round(PVE,2)
+```
+
