@@ -1,0 +1,273 @@
+---
+title: "Beixi_Lei_Simulation_Assignment4"
+author: "Beixi Lei"
+course: "Simulation Application"
+date: "2/18/2018"
+output: html_document
+---
+
+```{r}
+MYUNIFORM <- function(inputvar) {
+#
+# Initialize Constants
+#
+  IM1<-2147483563
+  IM2<-2147483399
+  IA1<-40014
+  IA2<-40692
+  IQ1<-53668
+  IQ2<-52774
+  IR1<-12211
+  IR2<-3791
+  NTAB<-32
+  EPS<-1.2e-7
+  RNMX<-1.-EPS
+#
+# Transform Variables
+#
+  IMM1<-IM1-1
+  NDIV<-as.integer(1+IMM1/NTAB)
+  AM<-1.0/IM1
+#
+# Initialize variables and arrays
+#
+  idum<-inputvar[1]
+  idum2<-123456789
+  numran<-inputvar[2]
+  ran2<-0
+  iy<-0
+  iv<-rep(0,NTAB)
+  rand_uniform_c<-rep(0,numran)
+#
+# Run the random number loop
+#  
+    icount<-1
+  for (icount in 1:numran) {
+    if (idum <= 0) {
+      idum<-max(-idum,1)
+      idum2<-idum
+      j<-NTAB+8
+      while (j > 0) {
+        k=as.integer(idum/IQ1)
+        idum<-IA1*(idum-k*IQ1)-k*IR1
+        if (idum < 0) {idum=idum+IM1}
+        if (j <= NTAB) {iv[j]<-idum}
+        j<-j-1
+      }
+        iy<-iv[1]
+      }
+    k<-as.integer(idum/IQ1)
+    idum<-IA1*(idum-k*IQ1)-k*IR1
+    if(idum < 0) {idum=idum+IM1}
+    k=as.integer(idum2/IQ2)
+    idum2<-IA2*(idum2-k*IQ2)-k*IR2 
+    if (idum2 < 0) {idum2<-idum2+IM2}
+    j<-as.integer(iy/NDIV)+1
+    iy<-iv[j]-idum2
+    iv[j]<-idum
+    if(iy < 1) {iy<-iy+IMM1}
+    ran2<-min(AM*iy,RNMX)
+    rand_uniform_c[icount]<-ran2
+    }
+  return(rand_uniform_c)
+}
+```
+
+```{r}
+#
+# Inverse Normal Generator
+# Input is vector of uniform random numbers
+#
+MYNORM <- function(seed,numran) {
+  inputvar<-rep(0,2)
+  inputvar[1]<-seed
+  inputvar[2]<-numran
+#
+# Call Uniform Random Number Generator
+#
+  rand_uniform_c<-MYUNIFORM(inputvar)
+  # Initialize Constants
+  a0<-2.50662823884
+  a1<--18.61500062529
+  a2<-41.39119773534
+  a3<--25.44106049637
+  b0<--8.47351093090
+  b1<-23.08336743743
+  b2<--21.06224101826
+  b3<-3.13082909833
+  c0<-0.3374754822726147
+  c1<-0.9761690190917186
+  c2<-0.1607979714918209
+  c3<-0.0276438810333863
+  c4<-0.0038405729373609
+  c5<-0.0003951896511919
+  c6<-0.0000321767881768
+  c7<-0.0000002888167364
+  c8<-0.0000003960315187
+#
+# Call Uniform Random Number Generator
+#
+inputvar<-c(seed,numran)
+rand_uniform_c<-MYUNIFORM(inputvar)
+#
+# Loop over set of uniform random numbers and transform
+#
+  jcount<-1
+  rand_norm_c<-rep(0,numran)
+  while(jcount <= numran) {
+    u<-rand_uniform_c[jcount]
+    y<-u-0.5
+    if(abs(y) < 0.42) {
+      r<-y*y
+      x<-y*(((a3*r+a2)*r+a1)*r+a0)/((((b3*r+b2)*r+b1)*r+b0)*r+1)
+    } else {
+      r<-u
+      if(y>0){r<-1-u}
+      r<-log(-log(r))
+      x<-c0+r*(c1+r*(c2+r*(c3+r*(c4+r*(c5+r*(c6+r*(c7+r*c8)))))))
+      if(y<0){x<--x}
+    }
+#  cat("JCOUNT",jcount,"",u,"",x,"\n")
+  rand_norm_c[jcount]<-x
+  jcount=jcount+1
+  }
+  return(rand_norm_c)
+}
+
+```
+
+
+```{r}
+#
+# Call Normal Random Number Generator (INPUT: UNIFORM RANDOM NUMBER VECTOR)
+#
+seed<-0
+numran<-1000000
+rand_norm_c<-MYNORM(seed,numran)
+```
+
+
+```{r}
+# Calculate simulated and true stock price
+
+Initial_Value <- 10000
+S0 <- 2750
+rf <- 0.03
+divyield <- 0.02
+Drift <- 0.06
+Strike<-S0
+Volatility<- 0.15
+TMaturity<- 5
+DeltaT <- 1/12
+numpath<-1000
+St0_Vals<-matrix(rep(0),nrow=60, ncol=numpath)
+St1_Vals <- matrix(rep(0),nrow=60,ncol = numpath)
+jcount<- 1  
+lcount<- 1 
+
+while(jcount <= numpath) {
+  St<-S0    #St is the simulated stock price
+  St1 <- S0   #St1 is the true stock price
+  for (kcount in 1:60) {
+    St<-St*(exp((rf-divyield-0.5*(Volatility^2))*DeltaT+Volatility*sqrt(DeltaT)*rand_norm_c[lcount]))
+    St1 <- St1*exp(Drift*DeltaT + Volatility*sqrt(DeltaT)*rand_norm_c[lcount])
+    
+    St0_Vals[kcount,jcount]<-St
+    St1_Vals[kcount,jcount] <- St1
+    lcount<-lcount+1
+  }
+  
+  jcount<- jcount+1
+}
+
+```
+
+```{r}
+#Calculate average stock price
+
+St_Avg_Vals<- matrix(rep(0),nrow=60, ncol= numpath)
+St_Count <- matrix(rep(0),nrow=60, ncol=numpath)
+St1_Count <- matrix(rep(0),nrow=60, ncol=numpath)
+SIIA_Vals <- matrix(rep(0),nrow =60,ncol = numpath)
+
+for (jcount in 1:numpath){
+   St_Count[1,jcount] <- St0_Vals[1,jcount]
+   St1_Count[1,jcount] <- St1_Vals[60,jcount]
+
+   for (icount in 2:60){
+     St_Count[icount,jcount] <- St_Count[icount-1,jcount] + St0_Vals[icount,jcount]
+     St1_Count[icount,jcount] <- St1_Count[icount-1,jcount] + St1_Vals[60-icount+1,jcount]
+   }
+}
+
+for (jcount in 1:numpath){
+  for (icount in 1:60){
+    St_Avg_Vals[icount,jcount] <- (St_Count[icount,jcount] + St1_Count[60-icount+1,jcount])/60
+  }
+}
+ #cat (St_Avg_Vals)
+
+for (jcount in 1:numpath){
+  for (icount in 1:60){
+    SIIA_Ret <- max(2*((St_Avg_Vals[icount,jcount]-S0)/S0),0)
+    SIIA_Vals[icount,jcount] <- (Initial_Value + Initial_Value*SIIA_Ret)*exp(-rf*icount/12)            
+  }
+}
+
+FV_SIIA <- mean(SIIA_Vals[1:numpath])
+PV_SIIA <- mean(SIIA_Vals[60,])
+PV_SIIA
+```
+
+```{r}
+#Calculate delta for Asian option
+
+Option_Payoff <- matrix(rep(0),nrow=60,ncol= numpath)
+Option_Delta <- matrix(rep(0),nrow=60,ncol=numpath)
+
+for (jcount in 1:numpath){
+  for (icount in 1:59){
+    Option_Payoff[icount,jcount] <- max((St_Avg_Vals[icount,jcount]-S0)*(2*10000/S0),0)*exp(-rf*icount/12)
+    if (Option_Payoff[icount,jcount]>0){
+      Option_Delta[icount,jcount] <- exp(-rf*icount/12)*(St_Avg_Vals[icount,jcount]/S0)*(2*10000/S0)
+    }
+    icount <- icount + 1
+  }
+  jcount <- jcount + 1
+}
+
+Asian_Val <- rowMeans(Option_Payoff)
+#Asian_Val
+Asian_Delta <- rowMeans(Option_Delta)
+cat(Asian_Delta)
+```
+
+```{r}
+#Hedging strategy: long stock for Asian option 
+#Cost = shares bought * spot price
+
+PV_St1_Long <- rep(0,60)
+Asian_Delta_Diff <- diff(Asian_Delta)
+## Stock position = delta*stt
+St1_Long <- Asian_Delta_Diff *rowMeans(St1_Vals)[2:60]
+PV_St1_Long[1] <- mean(St1_Vals[1,])
+for(icount in 2:60){
+  PV_St1_Long[icount] <- St1_long[i-1]*exp(-rf*icount/12)
+}
+
+cat(Asian_Delta_Diff,"\n")
+cat(PV_St1_Long)
+```
+
+```{r}
+#Calculate Portfolio Value and SIIA Value
+
+SIIA <- rowMeans(SIIA_Vals)
+Portfolio <- SIIA + PV_St1_Long
+SIIA
+Portfolio
+
+#Summary for bOTH Portfolio contains SIIA and Asian option as well as SIIA
+summary(Portfolio)
+summary(SIIA)
+```
