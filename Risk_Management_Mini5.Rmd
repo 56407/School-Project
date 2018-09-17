@@ -1,0 +1,100 @@
+---
+title: "Mini5"
+author: "Beixi Lei"
+date: "4/18/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(corpcor)
+library(tseries)
+library(quantmod)
+library(PerformanceAnalytics)
+library(plyr)
+library(MASS)
+```
+
+
+Portfolio return historical and parametric VaR
+```{r}
+#Mult-stock case: portfolio 
+#sktpool is a data.frame
+stkpool = c("CL","MGA","ABX","NLY","MAS","DISCA","DISCK","VIAB","VIA"
+            ,"GT")
+# Specify Date range of stkdata
+StartDate = as.Date("2017-03-13")
+EndDate = as.Date("2018-03-13")
+
+# Get data from Yahoo!Finance
+for(stk in stkpool){
+  getSymbols(stk, from = StartDate, to = EndDate)
+  expr <- paste(stk, " = data.frame(dailyReturn(", stk, "))", sep="")
+  na.omit(stk)
+  eval(parse(text = expr))
+  # CL = data.frame(date = index(dailyReturn(CL)), dailyReturn(CL))
+}
+
+stock <- cbind(CL,MGA,ABX,NLY,MAS,DISCA,DISCK,VIAB,VIA,GT)
+#stock
+```
+
+
+```{r}
+#Calculate variance-covariance matrix
+covmat = matrix(c(cov(stock)),nrow=length(stkpool),ncol=length(stkpool))
+range.names = c("stock1", "stock2", "stock3", "stock4", "stock5","stock6", "stock7", "stock8", "stock9", "stock10")
+dimnames(covmat) = list(range.names,range.names)
+#covmat
+#Transfome covariance to correlation matrix
+covmat <- cov2cor(covmat)
+#covmat
+#calculcate weight matrix: equally weight portfolio 
+weight <- matrix(rep(0),nrow = length(stkpool),ncol=1)
+
+for (i in 1:length(stkpool)){
+  weight[i] <- 0.1
+  i <-i + 1
+}
+#Equally weight
+weightinverse <- ginv(weight)
+#Portfolio standard deviation 
+portfoliovariance<- weightinverse %*% covmat %*% weight
+portfoliostd <- sqrt(portfoliovariance)
+
+#Portfolio mean
+portfoliomean = 0
+w = 1/length(stkpool)
+for (i in 1:length(stkpool)){
+  portfoliomean <- portfoliomean + mean(stock[,i])*w
+}
+
+rp = 0
+w = 1 / length(stkpool)
+for(i in 1:length(stkpool)){
+  rp <- rp + stock[i]*w
+}
+
+VaR(rp$daily.returns)
+VaR(rp$daily.returns,0.99)
+#hist(rp$daily.returns,breaks=30,freq=F)
+#curve(dnorm(x, mean=mean(rp$daily.returns), sd=sd(rp$daily.returns)),col="darkblue",add=TRUE,lwd=2)
+
+```
+
+
+```{r}
+#Read file contains VIX, GSPC and interest rate at the same daily return period
+setwd("~/Desktop")
+information <- read.csv("~/Desktop/^GSPC.csv",header=TRUE,sep="")
+#information
+#Multiple regression 
+fit <- lm(portfolio.returns ~ GSPCAdjClose + VIXAdjClose + DSG1,data=information)
+summary(fit)
+```
+
+Write daily return to ^GSPC.csv
+```{r}
+setwd("~/Desktop")
+write.csv(x=as.data.frame(stock),file="dailyreturn.csv")
+```
+
