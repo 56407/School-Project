@@ -1,0 +1,171 @@
+---
+title: "Project"
+author: "Yizhe Wang"
+date: "10/24/2017"
+output: html_document
+---
+
+The Time period we decided on is from :2012-01-01 to 2016-12-31, on monthly basis.
+
+Loading Libraries
+```{r}
+library(quantmod)
+library(PerformanceAnalytics)
+library(ggplot2)
+library(tseries)
+library(dplyr)
+```
+
+
+Loading ff variables(rf, SMB, HML, etc.)
+```{r}
+ff = read.csv("F-F_Research_Data_Factors.CSV", header = TRUE)
+ff = ff[which(ff$X >= 201201 & ff$X <= 201612),]
+rownames(ff) = 1:nrow(ff)
+```
+
+Loading Tickers of S&P 500
+```{r}
+sym = as.character( read.csv('http://trading.chrisconlan.com/SPstocks_current.csv', stringsAsFactors = FALSE, header = FALSE)[,1] )
+sym = sym[-which(sym == "BHI")]
+sym = sym[-which(sym == "BRK.B")]
+sym = sym[-which(sym == "BF.B")]
+sym = sym[-which(sym == "CAT")]
+sym = sym[-which(sym == "CLX")]
+#sym = sym[-which(sym == "")]
+sym = sym[-which(sym == "HAR")]
+sym = sym[-which(sym == "LLTC")]
+sym = sym[-which(sym == "MJN")]
+sym = sym[-which(sym == "RAI")]
+sym = sym[-which(sym == "TSO")]
+sym = sym[-which(sym == "WFM")]
+sym = sym[-which(sym == "YHOO")]
+
+
+```
+
+
+Loading Stock Adjusted Closing Price
+```{r, warning=FALSE}
+total = as.data.frame(get.hist.quote(instrument = sym[1], start="2011-12-01", end="2016-12-31",quote = "Adjusted",  provider = "yahoo",compression = "monthly"))
+colnames(total) = sym[1]
+total = data.frame(date = as.character(rownames(total)),value = total)
+
+for (i in 2:length(sym)) {
+temp = as.data.frame(get.hist.quote(instrument = sym[i], start="2011-12-01", end="2016-12-31",quote = "Adjusted",  provider = "yahoo",compression = "monthly"))
+colnames(temp) = sym[i]
+temp = data.frame(date = as.character(rownames(temp)),value = temp)
+total = full_join(total, temp, by = "date")
+}
+
+```
+
+
+Delete columns with NA value (Does not fit the requirement of 60 month chosen)
+```{r}
+new_total = total[ , colSums(is.na(total)) == 0]
+rownames(new_total) = new_total$date
+new_total = new_total[, -1]
+```
+
+Return
+```{r}
+return_total = data.frame(matrix(ncol = length(new_total[1,]), nrow = 60))
+for(j in 1:length(new_total[1,])) {
+  for(i in 1:60) {
+    return_total[i,j] = (new_total[i+1,j] - new_total[i,j])/(new_total[i,j])
+  }
+}
+colnames(return_total) = colnames(new_total)
+rownames(return_total) = rownames(new_total[-1,])
+```
+
+All available S&P 500 stocks adjusted return -> View(return_total)
+
+Finding Alphas and Betas
+```{r}
+alpha = data.frame(matrix(ncol = length(return_total[1,]), nrow = 1))
+colnames(alpha) = colnames(return_total)
+rownames(alpha) = "alpha"
+
+beta = data.frame(matrix(ncol = length(return_total[1,]), nrow = 1))
+colnames(beta) = colnames(return_total)
+rownames(beta) = "beta"
+
+for (i in 1:length(return_total[1,])) {
+  fit = lm(return_total[,i] ~ ff$Mkt.RF)
+  result = summary(fit)
+  alpha[1,i] = result$coefficients[1,1]
+  beta[1,i] = result$coefficients[2,1]
+}
+```
+
+Randomly Pick
+
+a = return_total[,sample(ncol(return_total), 10)]
+b = order(abs(beta), decreasing = T)
+b = b[c(45,90,135,180,225,270,315,350,395,440)]
+
+From random
+ [1] "DVN"  "IBM"  "APA"  "MSI"  "TDG"  "CMI"  "CELG" "BA"   "VRSK" "PM"  
+From selecting based on beta
+ [1] "BLK"  "FFIV" "MAR"  "PXD"  "AAL"  "MDLZ" "CINF" "MRK"  "KO"   "FRT"
+
+```{r}
+port_random_index = c("DVN", "IBM", "APA",  "MSI",  "TDG",  "CMI",  "CELG", "BA",   "VRSK", "PM")
+port_beta_index = c("BLK",  "FFIV", "MAR",  "PXD",  "AAL",  "MDLZ", "CINF", "MRK",  "KO",   "FRT")
+```
+
+
+```{r}
+port_random = c()
+for (i in 1:10) {
+  port_random = c(port_random,which(colnames(return_total) == port_random_index[i]))
+}
+
+port_beta = c()
+for (i in 1:10) {
+  port_beta = c(port_beta,which(colnames(return_total) == port_beta_index[i]))
+}
+```
+
+Expected return
+```{r}
+expected_mkt.f = mean(ff$Mkt.RF)/100
+expected_r = mean(ff$RF)/100
+
+
+expected_random = data.frame(matrix(ncol = 1, nrow = 10))
+rownames(expected_random) = c("DVN", "IBM", "APA",  "MSI",  "TDG",  "CMI",  "CELG", "BA",   "VRSK", "PM")
+colnames(expected_random) = "Expected Return"
+for (i in 1:10) {
+  expected_random[i,1] = expected_r + expected_mkt.f * as.numeric(beta[port_random[i]]) 
+}
+random_matrix = return_total[port_random]
+
+expected_beta = data.frame(matrix(ncol = 1, nrow = 10))
+rownames(expected_beta) = c("DVN", "IBM", "APA",  "MSI",  "TDG",  "CMI",  "CELG", "BA",   "VRSK", "PM")
+colnames(expected_beta) = "Expected Return"
+for (i in 1:10) {
+  expected_beta[i,1] = expected_r + expected_mkt.f * as.numeric(beta[port_beta[i]]) 
+}
+beta_matrix = return_total[port_beta]
+```
+
+
+```{r}
+cov_matrix_random = data.frame(matrix(ncol = 10, nrow = 10)) 
+cov_matrix_random = cov(random_matrix)
+
+cov_matrix_beta = data.frame(matrix(ncol = 10, nrow = 10)) 
+cov_matrix_beta = cov(beta_matrix)
+
+matrix1 = data.frame(matrix(ncol = 1, nrow = 10))
+for (i in 1:10) {
+  matrix1[i,1] = 1
+}
+
+A = (solve(as.vector(cov_matrix_random)) %*% matrix1) %*% t(expected_random)
+
+```
+
